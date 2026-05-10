@@ -68,6 +68,19 @@ def call_gemini_direct(prompt):
     except Exception as e:
         return f"حدث خطأ تقني: {str(e)}"
 
+def get_research_links(idea):
+    """دالة لجلب روابط حقيقية من الإنترنت بناءً على الفكرة"""
+    try:
+        from googlesearch import search
+        # نطلب من المبتكر كلمات مفتاحية بحثية
+        query = f"site:patents.google.com {idea[:50]}"
+        results = []
+        for url in search(query, num_rows=5):
+            results.append(url)
+        return results
+    except:
+        return []
+        
 # --- 4. منطق المحقق والتقرير ---
 def gatekeeper_logic(user_input):
     sys_prompt = f"""
@@ -122,31 +135,23 @@ if not st.session_state.gate_passed:
                 st.session_state.messages.append({"role": "assistant", "content": result.get("message")})
                 st.rerun()
 
-# المرحلة الثانية: التقرير (يتم الاتصال مرة واحدة فقط)
+# المرحلة الثانية: التقرير
 else:
     if st.session_state.full_report is None:
-        with st.spinner("جاري توليد التقرير الاستراتيجي..."):
+        with st.spinner("جاري توليد التقرير والبحث عن المراجع العالمية..."):
             st.session_state.full_report = generate_strategic_report(st.session_state.final_idea)
     
     st.success("تم الانتهاء من الفحص النافي للجهالة.")
 
-    # --- تنسيق الـ RTL ---
+    # تنسيق الـ RTL
     st.markdown("""
         <style>
-        [data-testid="stMarkdownContainer"] p, 
-        [data-testid="stMarkdownContainer"] li,
-        [data-testid="stMarkdownContainer"] div {
-            direction: rtl !important;
-            text-align: right !important;
-        }
-        textarea {
-            direction: rtl !important;
-            text-align: right !important;
+        [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {
+            direction: rtl !important; text-align: right !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # عرض التبويبات أولاً
     tab1, tab2, tab3 = st.tabs(["التشخيص الاستراتيجي", "المطالبات التقنية", "خارطة الطريق"])
     
     report_parts = re.split(r'\[===LEVEL[1-3]===\]', st.session_state.full_report)
@@ -158,17 +163,19 @@ else:
 
     with tab2:
         st.write(report_parts[2] if len(report_parts) > 2 else "لا توجد تفاصيل تقنية إضافية.")
+        st.divider()
+        st.markdown("#### 🔗 مراجع وبراءات اختراع ذات صلة")
+        with st.spinner("جاري استخراج الروابط المباشرة..."):
+            links = get_research_links(st.session_state.final_idea)
+            if links:
+                for link in links:
+                    st.markdown(f"* [رابط مرجعي من Google Patents]({link})")
+            else:
+                st.info("لم نتمكن من جلب روابط مباشرة حالياً، يمكنك البحث يدوياً في Google Patents.")
 
     with tab3:
         st.write(report_parts[3] if len(report_parts) > 3 else "خارطة الطريق قيد المراجعة.")
 
-    # --- نقل صندوق النسخ ليكون في الأسفل (بعد التبويبات) ---
-    st.divider() # خط فاصل للتنظيم
-    st.markdown("### 📋 التقرير الكامل (للمعاينة والنسخ)")
-    st.text_area("انسخ التقرير من هنا:", value=st.session_state.full_report, height=200)
-    st.info("💡 يمكنك الضغط على أيقونة النسخ في الزاوية العلوية اليمنى لصندوق النص أعلاه.")
-
-    if st.button("فحص ابتكار جديد 🔄"):
-        for key in st.session_state.keys():
-            del st.session_state[key]
-        st.rerun()
+    # صندوق النسخ في الأسفل
+    st.divider()
+    st.text_area("انسخ التقرير الكامل من هنا:", value=st.session_state.full_report, height=150)
