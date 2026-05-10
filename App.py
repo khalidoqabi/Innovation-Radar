@@ -123,6 +123,7 @@ if not st.session_state.gate_passed:
                 st.rerun()
 
 # المرحلة الثانية: التقرير (يتم الاتصال مرة واحدة فقط)
+# المرحلة الثانية: التقرير (يتم الاتصال مرة واحدة فقط)
 else:
     if st.session_state.full_report is None:
         with st.spinner("جاري توليد التقرير الاستراتيجي (اتصال وحيد)..."):
@@ -130,21 +131,26 @@ else:
     
     st.success("تم الانتهاء من الفحص النافي للجهالة.")
     
-    # تقسيم التقرير لتبويبات منظمة
-    tab1, tab2, tab3 = st.tabs(["Strategic Diagnosis", "Technical Claims", "Market Roadmap"])
+    # --- التعديل هنا: تبويبات باللغة العربية ---
+    tab1, tab2, tab3 = st.tabs(["التشخيص الاستراتيجي", "المطالبات التقنية", "خارطة الطريق"])
     
+    # تقسيم التقرير باستخدام الفواصل المعرفة في الدالة
     report_parts = re.split(r'\[===LEVEL[1-3]===\]', st.session_state.full_report)
     
     with tab1:
-        st.markdown("<div class='report-box'>", unsafe_allow_html=True)
+        st.markdown("<div class='report-box' style='direction: rtl; text-align: right;'>", unsafe_allow_html=True)
         st.write(report_parts[1] if len(report_parts) > 1 else st.session_state.full_report)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with tab2:
-        st.write(report_parts[2] if len(report_parts) > 2 else "لا توجد تفاصيل تقنية إضافية.")
+        st.markdown("<div style='direction: rtl; text-align: right;'>", unsafe_allow_html=True)
+        st.write(report_parts[2] if len(report_parts) > 2 else "لا توجد تفاصيل تقنية إضافية حالياً.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with tab3:
-        st.write(report_parts[3] if len(report_parts) > 3 else "خارطة الطريق قيد المراجعة.")
+        st.markdown("<div style='direction: rtl; text-align: right;'>", unsafe_allow_html=True)
+        st.write(report_parts[3] if len(report_parts) > 3 else "خارطة الطريق قيد المعالجة الاستثمارية.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button("فحص ابتكار جديد 🔄"):
         for key in st.session_state.keys():
