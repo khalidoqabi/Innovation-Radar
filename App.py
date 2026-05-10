@@ -122,30 +122,23 @@ if not st.session_state.gate_passed:
                 st.session_state.messages.append({"role": "assistant", "content": result.get("message")})
                 st.rerun()
 
-# المرحلة الثانية: التقرير
+# المرحلة الثانية: التقرير (يتم الاتصال مرة واحدة فقط)
 else:
     if st.session_state.full_report is None:
         with st.spinner("جاري توليد التقرير الاستراتيجي..."):
             st.session_state.full_report = generate_strategic_report(st.session_state.final_idea)
     
     st.success("تم الانتهاء من الفحص النافي للجهالة.")
-    
-    # --- البديل المستقر لزر النسخ ---
-    st.markdown("### 📋 التقرير الكامل (للمعاينة والنسخ)")
-    st.text_area("انسخ التقرير من هنا:", value=st.session_state.full_report, height=200)
-    st.info("💡 يمكنك الضغط على أيقونة النسخ في الزاوية العلوية اليمنى لصندوق النص أعلاه.")
 
-    # --- تنسيق الـ RTL المحدث ---
+    # --- تنسيق الـ RTL ---
     st.markdown("""
         <style>
-        /* فرض التنسيق من اليمين لليسار للنصوص والنقاط */
         [data-testid="stMarkdownContainer"] p, 
         [data-testid="stMarkdownContainer"] li,
         [data-testid="stMarkdownContainer"] div {
             direction: rtl !important;
             text-align: right !important;
         }
-        /* تنسيق صندوق النص ليكون RTL أيضاً */
         textarea {
             direction: rtl !important;
             text-align: right !important;
@@ -153,9 +146,9 @@ else:
         </style>
     """, unsafe_allow_html=True)
 
+    # عرض التبويبات أولاً
     tab1, tab2, tab3 = st.tabs(["التشخيص الاستراتيجي", "المطالبات التقنية", "خارطة الطريق"])
     
-    # باقي الكود الخاص بـ report_parts و Tabs كما هو دون تغيير
     report_parts = re.split(r'\[===LEVEL[1-3]===\]', st.session_state.full_report)
     
     with tab1:
@@ -168,6 +161,12 @@ else:
 
     with tab3:
         st.write(report_parts[3] if len(report_parts) > 3 else "خارطة الطريق قيد المراجعة.")
+
+    # --- نقل صندوق النسخ ليكون في الأسفل (بعد التبويبات) ---
+    st.divider() # خط فاصل للتنظيم
+    st.markdown("### 📋 التقرير الكامل (للمعاينة والنسخ)")
+    st.text_area("انسخ التقرير من هنا:", value=st.session_state.full_report, height=200)
+    st.info("💡 يمكنك الضغط على أيقونة النسخ في الزاوية العلوية اليمنى لصندوق النص أعلاه.")
 
     if st.button("فحص ابتكار جديد 🔄"):
         for key in st.session_state.keys():
