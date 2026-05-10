@@ -1,17 +1,16 @@
 import streamlit as st
-import google.generativeai as genai
-from googlesearch import search
+import requests
 import json
 import re
 
-# --- 1. إعدادات الصفحة والهوية البصرية ---
-st.set_page_config(page_title="رادار الابتكار الشامل", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. إعدادات الهوية البصرية واللغة ---
+st.set_page_config(page_title="رادار الابتكار الشامل", layout="wide")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
     
-    .stApp, .block-container, header, [data-testid="stMarkdownContainer"] * {
+    html, body, [data-testid="stSidebar"], .stApp {
         direction: rtl !important;
         text-align: right !important;
         font-family: 'Tajawal', sans-serif !important;
@@ -21,33 +20,22 @@ st.markdown("""
         background: linear-gradient(45deg, #0d47a1, #10b981);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-size: 3em;
+        font-size: 2.5em;
         font-weight: 900;
         text-align: center;
-        margin-bottom: 5px;
     }
     
-    .sub-header {
-        color: #5f6368;
-        text-align: center;
-        font-weight: 400;
-        margin-bottom: 30px;
-    }
-
-    [data-testid="stCodeBlock"] {
-        direction: ltr !important; 
+    .report-box {
+        background-color: #f8fafc;
+        border-right: 5px solid #10b981;
+        padding: 20px;
+        border-radius: 10px;
+        line-height: 1.8;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. إعدادات API والذاكرة المؤقتة ---
-try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
-   models/gemini-flash-latest:generateContent
-except Exception as e:
-    st.error("خطأ في مفتاح الـ API. تأكد من إعداده في الـ Secrets.")
-
+# --- 2. إدارة الحالة (Session State) لمنع تكرار الاتصال ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "gate_passed" not in st.session_state:
@@ -57,88 +45,108 @@ if "full_report" not in st.session_state:
 if "final_idea" not in st.session_state:
     st.session_state.final_idea = ""
 
-# --- 3. دوال الذكاء الاصطناعي ---
-
-def gatekeeper_check(user_input):
-    sys_prompt = f"""
-    أنت مُحقق تقني صارم. مهمتك قراءة الفكرة والتأكد من وجود 4 معايير:
-    1. الاحتياج الجوهري (المشكلة).
-    2. الآلية التقنية الدقيقة (كيف يعمل).
-    3. نقطة التفرد.
-    4. حالة النضج.
-    
-    النص: "{user_input}"
-    إما أن تقبل (accept) أو تطلب سؤالاً جراحياً (reject).
-    يجب أن يكون ردك بصيغة JSON فقط كالتالي:
-    {{"status": "accept", "message": "اكتملت"}} أو {{"status": "reject", "message": "سؤالك هنا"}}
-    """
+# --- 3. محرك الاتصال المباشر بـ Gemini ---
+def call_gemini_direct(prompt):
+    """مناداة API جوجل مباشرة لمحاكاة أمر curl وضمان العمل في منطقتك"""
     try:
-        response = model.generate_content(sys_prompt).text
-        match = re.search(r'\{.*\}', response, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        return {"status": "accept", "message": "تم التمرير"}
+        api_key = st.secrets["GEMINI_API_KEY"]
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+        
+        headers = {'Content-Type': 'application/json'}
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+        
+        response = requests.post(f"{url}?key={api_key}", json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            return response.json()['candidates'][0]['content']['parts'][0]['text']
+        else:
+            return f"خطأ في الاتصال: {response.status_code}"
+    except Exception as e:
+        return f"حدث خطأ تقني: {str(e)}"
+
+# --- 4. منطق المحقق والتقرير ---
+def gatekeeper_logic(user_input):
+    sys_prompt = f"""
+    أنت مُحقق براءات اختراع. حلل النص التالي: "{user_input}"
+    تأكد من وجود فكرة واضحة وآلية عمل.
+    رد بصيغة JSON فقط: {{"status": "accept"}} أو {{"status": "reject", "message": "سؤالك هنا"}}
+    """
+    res_text = call_gemini_direct(sys_prompt)
+    try:
+        match = re.search(r'\{.*\}', res_text, re.DOTALL)
+        return json.loads(match.group(0))
     except:
-        return {"status": "accept", "message": "تم التمرير تلقائياً"}
+        return {"status": "accept"}
 
 def generate_strategic_report(idea):
-    # استخراج كلمات بحث
-    kw_prompt = f"Extract 3 English keywords for searching patents about: {idea}"
-    keywords = model.generate_content(kw_prompt).text.strip()
-    
-    flat_links = []
-    try:
-        # البحث باستخدام المكتبة الصحيحة
-        for url in search(f"{keywords} patent 2026", num_results=3):
-            flat_links.append(url)
-    except: pass
-    
-    links_context = "\n".join(flat_links) if flat_links else "لا توجد روابط مباشرة حالياً."
-
     report_prompt = f"""
-    أنت خبير فحص نافي للجهالة. صغ تقريراً احترافياً للفكرة: "{idea}"
-    استخدم الفواصل: [===LEVEL1===] ، [===LEVEL2===] ، [===LEVEL3===]
-    
-    [===LEVEL1===] (التشخيص والمنافسين: {links_context})
-    [===LEVEL2===] (الفحص التقني والمطالبة القانونية بالعربي والإنجليزي)
-    [===LEVEL3===] (الجدوى الاستثمارية والتموضع الاستراتيجي)
+    صغ تقريراً استراتيجياً نافياً للجهالة للفكرة: "{idea}"
+    قسم التقرير بوضوح باستخدام العناوين:
+    [===LEVEL1===] التشخيص الاستراتيجي والمنافسين
+    [===LEVEL2===] الفحص التقني والمطالبات القانونية
+    [===LEVEL3===] الجدوى الاقتصادية وخارطة الطريق
     """
-    return model.generate_content(report_prompt).text
+    return call_gemini_direct(report_prompt)
 
-# --- 4. الواجهة ---
+# --- 5. واجهة المستخدم ---
 st.markdown("<h1 class='main-header'>🛡️ رادار الابتكار الشامل</h1>", unsafe_allow_html=True)
-st.markdown("<h3 class='sub-header'>منصة الفحص الاستراتيجي والتقييم النافي للجهالة</h3>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>المختبر الذكي لتقييم وهندسة الابتكارات</p>", unsafe_allow_html=True)
 
+# المرحلة الأولى: التحقيق
 if not st.session_state.gate_passed:
-    if prompt := st.chat_input("صف ابتكارك بدقة هنا..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        full_context = " ".join([m["content"] for m in st.session_state.messages if m["role"] == "user"])
-        
-        with st.spinner("جاري الفحص..."):
-            gate_result = gatekeeper_check(full_context)
-            if gate_result.get("status") == "reject":
-                st.session_state.messages.append({"role": "assistant", "content": gate_result.get("message")})
-                st.rerun()
-            else:
-                st.session_state.gate_passed = True
-                st.session_state.final_idea = full_context
-                st.rerun()
-
-    # عرض الرسائل
+    st.info("أهلاً بك. يرجى البدء بوصف ابتكارك ليقوم المحقق الذكي بتقييمه.")
+    
+    # عرض سجل الحوار
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-if st.session_state.gate_passed:
-    if st.session_state.full_report is None:
-        with st.spinner("جاري توليد التقرير الاستراتيجي..."):
-            st.session_state.full_report = generate_strategic_report(st.session_state.final_idea)
-            st.rerun()
+    if prompt := st.chat_input("اكتب تفاصيل ابتكارك هنا..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # دمج كل ما قاله المستخدم لفهم السياق كاملاً
+        full_context = " ".join([m["content"] for m in st.session_state.messages if m["role"] == "user"])
+        
+        with st.spinner("جاري فحص البيانات..."):
+            result = gatekeeper_logic(full_context)
+            
+            if result.get("status") == "accept":
+                st.session_state.gate_passed = True
+                st.session_state.final_idea = full_context
+                st.rerun()
+            else:
+                st.session_state.messages.append({"role": "assistant", "content": result.get("message")})
+                st.rerun()
 
-    report = st.session_state.full_report
-    st.markdown("### 📋 نتائج الفحص الاستراتيجي")
-    st.write(report)
+# المرحلة الثانية: التقرير (يتم الاتصال مرة واحدة فقط)
+else:
+    if st.session_state.full_report is None:
+        with st.spinner("جاري توليد التقرير الاستراتيجي (اتصال وحيد)..."):
+            st.session_state.full_report = generate_strategic_report(st.session_state.final_idea)
     
+    st.success("تم الانتهاء من الفحص النافي للجهالة.")
+    
+    # تقسيم التقرير لتبويبات منظمة
+    tab1, tab2, tab3 = st.tabs(["Strategic Diagnosis", "Technical Claims", "Market Roadmap"])
+    
+    report_parts = re.split(r'\[===LEVEL[1-3]===\]', st.session_state.full_report)
+    
+    with tab1:
+        st.markdown("<div class='report-box'>", unsafe_allow_html=True)
+        st.write(report_parts[1] if len(report_parts) > 1 else st.session_state.full_report)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with tab2:
+        st.write(report_parts[2] if len(report_parts) > 2 else "لا توجد تفاصيل تقنية إضافية.")
+
+    with tab3:
+        st.write(report_parts[3] if len(report_parts) > 3 else "خارطة الطريق قيد المراجعة.")
+
     if st.button("فحص ابتكار جديد 🔄"):
-        for key in st.session_state.keys(): del st.session_state[key]
+        for key in st.session_state.keys():
+            del st.session_state[key]
         st.rerun()
