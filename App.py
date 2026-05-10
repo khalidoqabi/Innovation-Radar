@@ -122,34 +122,40 @@ if not st.session_state.gate_passed:
                 st.session_state.messages.append({"role": "assistant", "content": result.get("message")})
                 st.rerun()
 
-
-# المرحلة الثانية: التقرير (يتم الاتصال مرة واحدة فقط)
+# المرحلة الثانية: التقرير
 else:
     if st.session_state.full_report is None:
-        with st.spinner("جاري توليد التقرير الاستراتيجي (اتصال وحيد)..."):
+        with st.spinner("جاري توليد التقرير الاستراتيجي..."):
             st.session_state.full_report = generate_strategic_report(st.session_state.final_idea)
     
     st.success("تم الانتهاء من الفحص النافي للجهالة.")
     
-    # --- إضافة زر النسخ في الأعلى ---
-    st.copy_to_clipboard(st.session_state.full_report)
-    st.info("💡 يمكنك الضغط على أيقونة النسخ التي ظهرت أعلى التقرير أو استخدامه مباشرة.")
+    # --- البديل المستقر لزر النسخ ---
+    st.markdown("### 📋 التقرير الكامل (للمعاينة والنسخ)")
+    st.text_area("انسخ التقرير من هنا:", value=st.session_state.full_report, height=200)
+    st.info("💡 يمكنك الضغط على أيقونة النسخ في الزاوية العلوية اليمنى لصندوق النص أعلاه.")
 
-    # --- التعديل الجوهري للتنسيق RTL ---
+    # --- تنسيق الـ RTL المحدث ---
     st.markdown("""
         <style>
-        [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {
+        /* فرض التنسيق من اليمين لليسار للنصوص والنقاط */
+        [data-testid="stMarkdownContainer"] p, 
+        [data-testid="stMarkdownContainer"] li,
+        [data-testid="stMarkdownContainer"] div {
             direction: rtl !important;
             text-align: right !important;
         }
-        .stTabs [data-baseweb="tab-list"] {
+        /* تنسيق صندوق النص ليكون RTL أيضاً */
+        textarea {
             direction: rtl !important;
+            text-align: right !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["التشخيص الاستراتيجي", "المطالبات التقنية", "خارطة الطريق"])
     
+    # باقي الكود الخاص بـ report_parts و Tabs كما هو دون تغيير
     report_parts = re.split(r'\[===LEVEL[1-3]===\]', st.session_state.full_report)
     
     with tab1:
